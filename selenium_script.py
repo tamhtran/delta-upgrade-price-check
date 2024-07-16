@@ -9,6 +9,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 import certifi
 import re
+from mail_service import MailService
+# from text_service import TextService
+import pytz
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -16,14 +20,15 @@ load_dotenv()
 # Configuration
 DELTA_URL = "https://www.delta.com/"
 DELTA_TRIPS_URL = "https://www.delta.com/mytrips/findPnrList"
-USERNAME = os.getenv("DELTA_USERNAME")
+USERNAME = os.getenv("DELTA_USERNAME")  # Ensure this is set in your .env file
 PASSWORD = os.getenv("DELTA_PASSWORD")
 LAST_NAME = os.getenv("DELTA_LAST_NAME")
 FIRST_NAME = os.getenv("DELTA_FIRST_NAME")  # Ensure this is set in your .env file
-CONFIRMATION_NO = os.getenv("DELTA_CONFIRMATION_NO")  # This is the GGCEZC variable
+CONFIRMATION_NO = os.getenv("DELTA_CONFIRMATION_NO")  # Ensure this is set in your .env file
+
+
 CHROME_PROFILE_PATH = os.path.expanduser(
     "~/Library/Application Support/Google/Chrome/Default")  # Change 'Default' to your specific profile if needed
-
 # Ensure spaces in the path are correctly handled
 CHROME_PROFILE_PATH = f'"{CHROME_PROFILE_PATH}"'
 
@@ -100,11 +105,12 @@ def check_upgrade_price(driver):
     last_name_field.send_keys(LAST_NAME)
 
     logging.info("Submitting the form")
-    last_name_field.send_keys(Keys.RETURN)
+    submit_button = wait_for_element(driver, By.ID, 'findTripSearch')
+    submit_button.click()
 
     # Wait for the page to load and the price to be visible
     logging.info("Waiting for the upgrade prices to be visible")
-    price_elements = WebDriverWait(driver, 30).until(
+    price_elements = WebDriverWait(driver, 300).until(
         EC.presence_of_all_elements_located((By.XPATH, '//div[@class="td-miles-column_info"]'))
     )
 
@@ -121,7 +127,8 @@ def check_upgrade_price(driver):
             price = price_match.group(1)
             departure = flight_match.group(1)
             destination = flight_match.group(2)
-            result = f"{price} USD for flight {departure} - {destination}"
+            result = (price, departure, destination)
+            # result = f"{price} USD for flight {departure} - {destination}"
             results.append(result)
             logging.info(f"Found: {result}")
         else:
@@ -130,6 +137,20 @@ def check_upgrade_price(driver):
     logging.info(f"Total results found: {len(results)}")
     for result in results:
         logging.info(result)
+    return results
+
+
+def get_message(results):
+    # Get the current time in PST
+    pst = pytz.timezone('America/Los_Angeles')
+    current_time = datetime.now(pst).strftime('%Y-%m-%d %H:%M:%S %Z')
+
+    body = f"Upgraded prices found for {CONFIRMATION_NO}:\n"
+    for price, departure, destination in results:
+        body += f"{price} USD for flight {departure} - {destination}\n"
+
+    body += f"\nChecked at {current_time}"
+    return body
 
 
 def main():
@@ -143,12 +164,13 @@ def main():
 
     driver = uc.Chrome(options=options)
 
-    if login(driver):
-        check_upgrade_price(driver)
 
+    # results = check_upgrade_price(driver)
+    results = [(100, 'LAX', 'JFK')]
+    mail_service = MailService()
+    mail_service.send_email(get_message(results), "ms.tam.h.tran@gmail.com")
     # Keep the browser open for 5 minutes
-    time.sleep(300)
-    logging.info("Keeping the browser open for 5 minutes")
+    # time.sleep(300)
     driver.quit()
 
 
