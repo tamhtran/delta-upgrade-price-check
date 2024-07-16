@@ -25,7 +25,7 @@ PASSWORD = os.getenv("DELTA_PASSWORD")
 LAST_NAME = os.getenv("DELTA_LAST_NAME")
 FIRST_NAME = os.getenv("DELTA_FIRST_NAME")  # Ensure this is set in your .env file
 CONFIRMATION_NO = os.getenv("DELTA_CONFIRMATION_NO")  # Ensure this is set in your .env file
-
+EMAIL_LIST = os.getenv("RECIPIENT_EMAIL_LIST").split(",")  # Parse the email list from the environment variable
 
 CHROME_PROFILE_PATH = os.path.expanduser(
     "~/Library/Application Support/Google/Chrome/Default")  # Change 'Default' to your specific profile if needed
@@ -145,9 +145,9 @@ def get_message(results):
     pst = pytz.timezone('America/Los_Angeles')
     current_time = datetime.now(pst).strftime('%Y-%m-%d %H:%M:%S %Z')
 
-    body = f"Upgraded prices found for {CONFIRMATION_NO}:\n"
+    body = f"Upgraded prices found for {CONFIRMATION_NO}\n"
     for price, departure, destination in results:
-        body += f"{price} USD for flight {departure} - {destination}\n"
+        body += f"\t{price} USD for flight {departure} - {destination}\n"
 
     body += f"\nChecked at {current_time}"
     return body
@@ -165,10 +165,13 @@ def main():
     driver = uc.Chrome(options=options)
 
 
-    # results = check_upgrade_price(driver)
-    results = [(100, 'LAX', 'JFK')]
-    mail_service = MailService()
-    mail_service.send_email(get_message(results), "ms.tam.h.tran@gmail.com")
+    results = check_upgrade_price(driver)
+    # results = [(100, 'LAX', 'JFK')]
+    if results:
+        mail_service = MailService()
+        for email in EMAIL_LIST:
+            if email:
+                mail_service.send_email(get_message(results), email)
     # Keep the browser open for 5 minutes
     # time.sleep(300)
     driver.quit()
